@@ -36,6 +36,13 @@ jobs:
       - name: Unit tests uitvoeren
         run: pytest tests/ -v --cov=src --cov-report=xml --cov-report=term-missing
 
+      - name: Pipeline + rapport end-to-end
+        run: |
+          python -m src.generate_demo_data
+          python -m src.main
+          python -m src.report --out /tmp/report
+          test -s /tmp/report/index.html
+
       - name: Coverage rapporteren
         uses: codecov/codecov-action@v4
         with:

@@ -1,13 +1,17 @@
 # HR Analytics — Employer Segmentation
 
-[![CI](https://github.com/KippieG/hr-analytics-segmentation/actions/workflows/ci.yml/badge.svg)](https://github.com/KippieG/hr-analytics-segmentation/actions/workflows/ci.yml)
-![Coverage](https://img.shields.io/badge/coverage-99.6%25-brightgreen)
+[![CI](https://github.com/phlppgdfry/hr-analytics-segmentation/actions/workflows/ci.yml/badge.svg)](https://github.com/phlppgdfry/hr-analytics-segmentation/actions/workflows/ci.yml)
+![Coverage](https://img.shields.io/badge/coverage-98%25-brightgreen)
 ![Python](https://img.shields.io/badge/Python-3.11+-blue.svg)
 ![Power BI](https://img.shields.io/badge/Power%20BI-DAX-yellow.svg)
 ![scikit-learn](https://img.shields.io/badge/scikit--learn-K--Means-orange.svg)
 ![License](https://img.shields.io/badge/license-MIT-green.svg)
 
-End-to-end pipeline that segments an employer portfolio using **RFM scoring + K-Means clustering**, with a Power BI operational dashboard for account managers and consultants.
+End-to-end pipeline that segments an employer portfolio using **RFM scoring + K-Means clustering**, plus a business-rule guardrail, and turns the result into a call list for account managers.
+
+**[▶ Open the generated report](https://phlppgdfry.github.io/hr-analytics-segmentation/)** — rebuilt by CI from the pipeline on every push.
+
+<a href="https://phlppgdfry.github.io/hr-analytics-segmentation/"><img src="docs/report/report-top.png" alt="Report: key finding, segment cards and bar charts of employers and revenue potential per segment" width="820"></a>
 
 ---
 
@@ -15,18 +19,32 @@ End-to-end pipeline that segments an employer portfolio using **RFM scoring + K-
 
 Many HR service providers treat their entire employer portfolio the same way — same contact frequency, same approach, same priority. This pipeline changes that.
 
-By scoring every employer on **Recency** (how long since last contact), **Frequency** (how often they interact) and **Monetary** (estimated revenue potential), the pipeline automatically classifies the full portfolio into four actionable segments. Account managers get a daily-refreshed Power BI dashboard that tells them exactly who to call first and why.
+By scoring every employer on **Recency** (how long since last contact), **Frequency** (how often they interact) and **Monetary** (estimated revenue potential), the pipeline automatically classifies the full portfolio into four actionable segments. The output is designed for a daily-refreshed Power BI dashboard (DAX measures and semantic model in [`powerbi/`](powerbi/)); the [HTML report](https://phlppgdfry.github.io/hr-analytics-segmentation/) is the open stand-in anyone can view without a licence.
 
-**Results on a portfolio of 1,000 employers:**
+**Results on a synthetic, seeded portfolio of 1,000 employers** (reproduce with the commands below):
 
 | Segment | Count | Share | Avg revenue potential | Avg priority score | Recommended action |
 |---|---|---|---|---|---|
-| 🟢 Champions | 94 | 9% | €233,000 | 48 / 100 | Retain — proactive contact |
+| 🟢 Champions | 84 | 8% | €227,000 | 45 / 100 | Retain — proactive contact |
 | 🔵 Potentials | 139 | 14% | €40,000 | 40 / 100 | Develop — identify upsell |
-| 🟡 At Risk | 618 | **62%** | €32,000 | 58 / 100 | Reactivate — personal re-contact |
+| 🟡 At Risk | 628 | **63%** | €36,000 | 58 / 100 | Reactivate — personal re-contact |
 | 🔴 Lost | 149 | 15% | €41,000 | 92 / 100 | Evaluate — win-back or write off |
 
-> **Key finding:** 62% of employers have drifted into the At Risk segment — they were once active but contact has gone quiet. Prioritising re-engagement here represents the highest short-term recovery opportunity.
+> **Key finding:** 63% of employers have drifted into the At Risk segment — they were once active but contact has gone quiet. Together they hold €22.4M in revenue potential, the highest short-term recovery opportunity.
+
+### A model is not a decision: the Champion guardrail
+
+Plotting the clusters showed something the summary table hid: K-Means on RFM is pulled by revenue
+size, so 10 large employers that **nobody had contacted for 180–670 days** were labelled
+*Champions* (€2.8M). Telling an account manager "retain, all is well" about a two-year-silent
+client is the wrong advice.
+
+The pipeline now applies an explicit business rule after clustering: a Champion without contact
+for more than 180 days becomes **At Risk**. It is configurable
+(`EmployerSegmentation(champion_max_recency_days=...)`, `None` switches it off), tested, and every
+moved row keeps its original cluster plus a `rule_override` reason, so the decision stays auditable.
+
+<img src="docs/report/rfm-map.png" alt="Scatter of days since last contact versus contacts in the last 12 months, coloured by segment, bubble size revenue potential" width="820">
 
 ---
 
@@ -48,6 +66,7 @@ src/
 │   └── data_quality.py    # Schema checks, null thresholds, outlier flags
 ├── analysis/
 │   └── segment_profiles.py # Aggregated segment statistics
+├── report.py              # HTML report: charts, profiles, call list
 └── main.py                # Pipeline orchestrator
 
 powerbi/
@@ -73,8 +92,9 @@ tests/
 ```
 [1] Load      → employers + interactions from data/raw/
 [2] Validate  → schema, nulls, referential integrity
-[3] Segment   → RFM scores → MinMax normalisation → K-Means (n=4)
+[3] Segment   → RFM scores → MinMax normalisation → K-Means (n=4) → business rules
 [4] Profile   → aggregated stats per segment → data/processed/
+[5] Report    → charts, profiles and call list → docs/report/index.html (python -m src.report)
 ```
 
 ---
@@ -92,6 +112,9 @@ python -m src.generate_demo_data
 # Run the full pipeline
 python -m src.main
 
+# Build the HTML report with charts and the call list → docs/report/index.html
+python -m src.report
+
 # Options
 python -m src.main --env staging --n-segments 4
 python -m src.main --skip-validation
@@ -100,8 +123,8 @@ python -m src.main --skip-validation
 **Run tests:**
 
 ```bash
-pytest                                        # 66 tests
-pytest --cov=src --cov-report=term-missing    # 99.6% coverage
+pytest                                        # 72 tests
+pytest --cov=src --cov-report=term-missing    # 98% coverage
 ruff check src/ tests/                        # linting
 mypy src/ --ignore-missing-imports            # type checking
 ```
@@ -151,11 +174,11 @@ SWITCH(
 
 ## Roadmap
 
-| Phase | Initiatives |
+| Status | Initiatives |
 |---|---|
-| Q3 2026 ✅ | Segmentation pipeline, Power BI dashboard, data quality monitoring |
-| Q4 2026 | Predictive churn model, CRM integration, self-service analytics portal |
-| H1 2027 | NL querying, market benchmarking, anomaly detection |
+| ✅ Done | Segmentation pipeline, business-rule guardrail, data quality validation, GDPR pseudonymisation, DAX measures, HTML report + call list |
+| Next | Predictive churn model, CRM integration, Power BI report file on the semantic model |
+| Later | Natural-language querying, market benchmarking, anomaly detection |
 
 Full details: [`docs/analytics_roadmap.md`](docs/analytics_roadmap.md)
 
@@ -168,7 +191,8 @@ Full details: [`docs/analytics_roadmap.md`](docs/analytics_roadmap.md)
 | pandas | Data manipulation |
 | scikit-learn | K-Means, MinMaxScaler |
 | pandera | Schema validation |
-| pytest / coverage | Testing (66 tests, 99.6% coverage) |
+| matplotlib | Report charts |
+| pytest / coverage | Testing (72 tests, 98% coverage) |
 | ruff / mypy | Linting and type checking |
 
 ---

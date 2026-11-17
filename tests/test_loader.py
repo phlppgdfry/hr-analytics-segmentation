@@ -1,11 +1,17 @@
 """Unit tests voor DataLoader en schema_definitions."""
 
-import pandas as pd
-import pytest
 from pathlib import Path
 
+import pandas as pd
+import pytest
+
 from src.ingestion.loader import DataLoader
-from src.ingestion.schema_definitions import employer_schema, interaction_schema, VALID_SECTORS, VALID_SIZES
+from src.ingestion.schema_definitions import (
+    VALID_SECTORS,
+    VALID_SIZES,
+    employer_schema,
+    interaction_schema,
+)
 
 
 @pytest.fixture
@@ -145,7 +151,9 @@ class TestSegmentationWithoutOptionalColumns:
 
     def test_fit_transform_without_frequency_column(self):
         from datetime import datetime, timedelta
+
         import numpy as np
+
         from src.transformation.segmentation import EmployerSegmentation
 
         rng = np.random.default_rng(0)
@@ -167,7 +175,9 @@ class TestSegmentationWithoutOptionalColumns:
 
     def test_fit_transform_without_revenue_column(self):
         from datetime import datetime, timedelta
+
         import numpy as np
+
         from src.transformation.segmentation import EmployerSegmentation
 
         rng = np.random.default_rng(1)

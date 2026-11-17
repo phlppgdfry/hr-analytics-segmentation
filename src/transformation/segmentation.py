@@ -67,8 +67,16 @@ class EmployerSegmentation:
     2. K-Means clustering op genormaliseerde RFM-ruimte
     """
 
-    def __init__(self, n_segments: int = 4, random_state: int = 42):
+    def __init__(
+        self,
+        n_segments: int = 4,
+        random_state: int = 42,
+        champion_max_recency_days: int | None = 180,
+    ):
         self.n_segments = n_segments
+        # K-Means on RFM is pulled by revenue size: a large employer nobody has called in two
+        # years can still land in the "Champions" cluster. This guardrail keeps the label honest.
+        self.champion_max_recency_days = champion_max_recency_days
         self.random_state = random_state
         self.scaler = MinMaxScaler()
         self.kmeans = KMeans(
@@ -88,6 +96,7 @@ class EmployerSegmentation:
         df = self._normalize_rfm(df)
         df = self._assign_clusters(df)
         df = self._map_segments(df)
+        df = self._apply_business_rules(df)
         df = self._compute_priority_score(df)
 
         self._is_fitted = True
@@ -189,6 +198,31 @@ class EmployerSegmentation:
         df["segment_action"] = df["segment_id"].map(
             lambda s: SEGMENT_DEFINITIONS[s].action
         )
+        return df
+
+    def _apply_business_rules(self, df: pd.DataFrame) -> pd.DataFrame:
+        """
+        Business rules on top of the statistical clusters, each traceable via `rule_override`.
+
+        - A Champion without contact for more than `champion_max_recency_days` becomes At Risk:
+          high value, but the relationship has gone quiet — that is exactly what At Risk means.
+        """
+        df["rule_override"] = ""
+        if self.champion_max_recency_days is None:
+            return df
+        lapsed = (df["segment_id"] == 0) & (df["recency_days"] > self.champion_max_recency_days)
+        if lapsed.any():
+            df.loc[lapsed, "segment_id"] = 2
+            df.loc[lapsed, "rule_override"] = f"champion_no_contact_{self.champion_max_recency_days}d"
+            for column, attribute in (("segment_name", "name"), ("segment_priority", "priority"), ("segment_action", "action")):
+                df.loc[lapsed, column] = df.loc[lapsed, "segment_id"].map(
+                    lambda s, a=attribute: getattr(SEGMENT_DEFINITIONS[s], a)
+                )
+            logger.info(
+                "Business rule: %d Champions without contact for >%d days moved to At Risk",
+                int(lapsed.sum()),
+                self.champion_max_recency_days,
+            )
         return df
 
     def _compute_priority_score(self, df: pd.DataFrame) -> pd.DataFrame:

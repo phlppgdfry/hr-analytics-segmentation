@@ -97,3 +97,37 @@ class TestEmployerSegmentation:
         low_recency = result.nsmallest(10, "recency_days")["priority_score"].mean()
         assert high_recency > low_recency, \
             "Werkgevers met meer dagen geen contact zouden hogere prioriteit moeten hebben"
+
+
+class TestBusinessRules:
+    def test_lapsed_champion_is_moved_to_at_risk_and_traceable(self, sample_employers):
+        seg = EmployerSegmentation(champion_max_recency_days=180)
+        result = seg.fit_transform(sample_employers)
+        champions = result[result["segment_name"] == "Champions"]
+        assert (champions["recency_days"] <= 180).all()
+        moved = result[result["rule_override"] != ""]
+        assert (moved["segment_name"] == "At Risk").all()
+        assert (moved["recency_days"] > 180).all()
+
+    def test_rule_can_be_switched_off(self, sample_employers):
+        seg = EmployerSegmentation(champion_max_recency_days=None)
+        result = seg.fit_transform(sample_employers)
+        assert (result["rule_override"] == "").all()
+
+    def test_lapsed_champion_scenario(self):
+        today = datetime.now()
+        rows = []
+        for i in range(60):
+            big = i < 15
+            rows.append(
+                {
+                    "employer_id": f"EMP{i:05d}",
+                    "company_size": "large" if big else "micro",
+                    "sector": "logistics",
+                    "last_contact_date": (today - timedelta(days=600 if i == 0 else i % 40)).strftime("%Y-%m-%d"),
+                    "frequency_12m": 1 if i == 0 else (20 if big else i % 5),
+                }
+            )
+        result = EmployerSegmentation().fit_transform(pd.DataFrame(rows))
+        first = result[result["employer_id"] == "EMP00000"].iloc[0]
+        assert first["segment_name"] != "Champions"

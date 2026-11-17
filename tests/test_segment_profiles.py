@@ -1,7 +1,7 @@
 """Unit tests voor SegmentProfiler."""
 
-import pandas as pd
 import numpy as np
+import pandas as pd
 import pytest
 
 from src.analysis.segment_profiles import SegmentProfiler
