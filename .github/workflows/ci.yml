@@ -67,12 +67,13 @@ jobs:
         run: python src/generate_demo_data.py
 
       - name: Datakwaliteit valideren
-        run: python -c "
+        shell: python
+        env:
+          PYTHONPATH: ${{ github.workspace }}
+        run: |
           import pandas as pd
           from src.validation.data_quality import DataQualityValidator
-          v = DataQualityValidator()
-          emp = pd.read_csv('data/raw/employers.csv')
-          report = v.validate_employers(emp)
+
+          report = DataQualityValidator().validate_employers(pd.read_csv("data/raw/employers.csv"))
           print(report.summary())
-          assert report.passed, 'Data quality check mislukt!'
-          "
+          assert report.passed, "Data quality check mislukt!"
