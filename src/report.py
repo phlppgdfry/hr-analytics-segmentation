@@ -15,6 +15,7 @@ import argparse
 import base64
 import html
 import io
+import shutil
 from datetime import date
 from pathlib import Path
 
@@ -34,6 +35,9 @@ SEGMENT_COLORS = {
 INK = "#1d2430"
 MUTED = "#6b7280"
 GRID = "#e5e7eb"
+# Four segment-coloured bars; inline so the report stays one self-contained file.
+FAVICON = "data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 32 32%22%3E%3Crect width=%2232%22 height=%2232%22 rx=%228%22 fill=%22%231d2430%22/%3E%3Crect x=%227%22 y=%2217%22 width=%224%22 height=%228%22 rx=%221%22 fill=%22%232e7d5b%22/%3E%3Crect x=%2212.5%22 y=%2214%22 width=%224%22 height=%2211%22 rx=%221%22 fill=%22%233b6fb6%22/%3E%3Crect x=%2218%22 y=%227%22 width=%224%22 height=%2218%22 rx=%221%22 fill=%22%23d98a1c%22/%3E%3Crect x=%2223.5%22 y=%2213%22 width=%222.5%22 height=%2212%22 rx=%221%22 fill=%22%23b8433a%22/%3E%3C/svg%3E"
+SITE_URL = "https://phlppgdfry.github.io/hr-analytics-segmentation/"
 
 
 def latest_segmented_file(processed_dir: Path) -> Path:
@@ -145,6 +149,11 @@ def build_html(df: pd.DataFrame, profiles: pd.DataFrame, generated_on: date) -> 
     return f"""<!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Employer segmentation report</title>
+<meta name="description" content="Who to call first, and why: RFM + K-Means segmentation of {total:,} employers with a business-rule guardrail and this week's call list.">
+<link rel="icon" type="image/svg+xml" href="{FAVICON}">
+<meta property="og:type" content="website"><meta property="og:title" content="Who to call first, and why — employer segmentation">
+<meta property="og:description" content="{shares["At Risk"]} of {total:,} employers have gone quiet: €{at_risk_revenue / 1e6:.1f}M in revenue potential. Charts, segment profiles and a call list, rebuilt from the pipeline on every push.">
+<meta property="og:image" content="{SITE_URL}og.png"><meta name="twitter:card" content="summary_large_image">
 <style>
 :root{{--ink:{INK};--muted:{MUTED};--line:{GRID};--bg:#f7f7f5}}
 *{{box-sizing:border-box}}body{{margin:0;background:var(--bg);color:var(--ink);font:15px/1.55 -apple-system,"Segoe UI",Inter,Roboto,sans-serif}}
@@ -198,6 +207,10 @@ def write_report(processed_dir: Path, out_dir: Path, generated_on: date | None =
     chart_segment_overview(df).savefig(out_dir / "segments.png", dpi=160, bbox_inches="tight", facecolor="white")
     chart_rfm_map(df).savefig(out_dir / "rfm-map.png", dpi=160, bbox_inches="tight", facecolor="white")
     plt.close("all")
+    # Share image for links on LinkedIn/Slack (og:image); rendered once, kept in the repo.
+    card = Path(__file__).resolve().parents[1] / "docs" / "report" / "social-preview.png"
+    if card.exists() and card.resolve() != (out_dir / "og.png").resolve():
+        shutil.copyfile(card, out_dir / "og.png")
     return target
 
 
